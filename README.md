@@ -11,5 +11,5 @@ A modern Python boilerplate for building AI and GenAI applications.
 ├── playground/       # Experimental code and notebooks
 ├── .env.example      # Environment variables template
 ├── pyproject.toml    # Project dependencies and metadata
-└── uv.lock          # Locked dependencies
+└── uv.lock           # Locked dependencies
 ```
