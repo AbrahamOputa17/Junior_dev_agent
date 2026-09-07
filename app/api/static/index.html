@@ -500,10 +500,13 @@
 
         <div class="sidebar-section-title">Target Workspace</div>
         <div class="config-card">
-            <label class="config-label">Repository Path</label>
-            <input type="text" id="repo-path" value="demo_repo/auth_app" placeholder="Target repo path">
+            <label class="config-label" title="Enter a local folder path on the server — not a GitHub URL">📁 Local Folder Path</label>
+            <input type="text" id="repo-path" value="demo_repo/auth_app" placeholder="e.g. demo_repo/auth_app">
+            <div style="font-size: 0.71rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+                Local directory path, not a URL.<br>Leave blank to use project root.
+            </div>
 
-            <label class="config-label" style="margin-top: 10px;">Target File (Optional)</label>
+            <label class="config-label" style="margin-top: 12px;">Target File (Optional)</label>
             <input type="text" id="target-file" value="" placeholder="e.g. app/auth.py">
         </div>
 
