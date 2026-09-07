@@ -498,17 +498,34 @@
             <span>+ New Chat Session</span>
         </button>
 
+        <div class="sidebar-section-title">GitHub Repository</div>
+        <div class="config-card">
+            <label class="config-label">🔗 Clone from GitHub</label>
+            <input type="text" id="github-url" placeholder="https://github.com/owner/repo">
+            <input type="text" id="github-branch" placeholder="Branch (optional, e.g. main)" style="margin-top: 6px;">
+            <button id="clone-btn" onclick="cloneRepo()" style="
+                width: 100%; margin-top: 8px; padding: 9px;
+                background: #1d2d50; border: 1px solid #3b5bdb;
+                border-radius: 7px; color: #93c5fd; font-size: 0.83rem;
+                font-weight: 600; cursor: pointer; transition: all 0.2s;
+                display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span id="clone-btn-icon">⬇️</span> Clone & Use
+            </button>
+            <div id="clone-status" style="font-size: 0.72rem; margin-top: 6px; line-height: 1.4; display: none;"></div>
+        </div>
+
         <div class="sidebar-section-title">Target Workspace</div>
         <div class="config-card">
-            <label class="config-label" title="Enter a local folder path on the server — not a GitHub URL">📁 Local Folder Path</label>
+            <label class="config-label" title="Enter a local folder path — filled automatically after cloning">📁 Local Folder Path</label>
             <input type="text" id="repo-path" value="demo_repo/auth_app" placeholder="e.g. demo_repo/auth_app">
             <div style="font-size: 0.71rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
-                Local directory path, not a URL.<br>Leave blank to use project root.
+                Auto-filled after cloning, or type a local path.
             </div>
 
             <label class="config-label" style="margin-top: 12px;">Target File (Optional)</label>
             <input type="text" id="target-file" value="" placeholder="e.g. app/auth.py">
         </div>
+
 
         <div class="sidebar-section-title">Operational Mode</div>
         <div class="mode-option active" onclick="selectMode('investigate')" id="mode-opt-investigate">
@@ -584,6 +601,58 @@
             const pill = document.getElementById('input-mode-pill');
             const modeIcons = { investigate: '🔍', debug: '🐛', review: '📋', test: '🧪', implement: '🚀' };
             pill.innerHTML = `<span>${modeIcons[mode]}</span> Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+        }
+
+        async function cloneRepo() {
+            const urlInput = document.getElementById('github-url');
+            const branchInput = document.getElementById('github-branch');
+            const btn = document.getElementById('clone-btn');
+            const icon = document.getElementById('clone-btn-icon');
+            const statusEl = document.getElementById('clone-status');
+
+            const url = urlInput.value.trim();
+            if (!url) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#f87171';
+                statusEl.textContent = '⚠️ Please enter a GitHub repository URL.';
+                return;
+            }
+
+            // Loading state
+            btn.disabled = true;
+            icon.textContent = '⏳';
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-muted)';
+            statusEl.textContent = 'Cloning repository...';
+
+            try {
+                const res = await fetch(`${API_URL}/api/clone`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        github_url: url,
+                        branch: branchInput.value.trim() || null
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    statusEl.style.color = '#f87171';
+                    statusEl.textContent = `❌ ${data.detail || 'Clone failed.'}`;
+                } else {
+                    // Auto-fill the local path field
+                    document.getElementById('repo-path').value = data.local_path;
+                    statusEl.style.color = '#34d399';
+                    statusEl.textContent = `✅ ${data.status === 'updated' ? 'Updated' : 'Cloned'}: ${data.repo} → ${data.local_path}`;
+                }
+            } catch (err) {
+                statusEl.style.color = '#f87171';
+                statusEl.textContent = `❌ Network error: ${err.message}`;
+            } finally {
+                btn.disabled = false;
+                icon.textContent = '⬇️';
+            }
         }
 
         function handleKey(e) {

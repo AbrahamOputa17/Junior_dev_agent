@@ -34,6 +34,10 @@ class TaskRequest(BaseModel):
 class IndexRequest(BaseModel):
     repo_path: str
 
+class CloneRequest(BaseModel):
+    github_url: str
+    branch: Optional[str] = None
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
@@ -75,6 +79,56 @@ def index_repo(req: IndexRequest):
     agent = JuniorDevAgent(target_path)
     res = agent.index_repository()
     return res
+
+
+@app.post("/api/clone")
+def clone_repo(req: CloneRequest):
+    """Clone a GitHub repository to cloned_repos/<owner>/<repo> inside the project."""
+    import subprocess, re
+
+    url = req.github_url.strip()
+
+    # Basic GitHub URL validation
+    if not re.match(r"https?://github\.com/[\w.\-]+/[\w.\-]+(/?|\.git)$", url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid GitHub URL. Expected format: https://github.com/owner/repo"
+        )
+
+    # Derive a clean folder name: owner__repo
+    clean = url.rstrip("/").removesuffix(".git")
+    parts = clean.split("/")
+    folder_name = f"{parts[-2]}__{parts[-1]}"
+    dest = os.path.join(PROJECT_ROOT, "cloned_repos", folder_name)
+
+    # If already cloned, just pull latest
+    if os.path.exists(os.path.join(dest, ".git")):
+        cmd = ["git", "-C", dest, "pull"]
+        action = "updated"
+    else:
+        os.makedirs(dest, exist_ok=True)
+        cmd = ["git", "clone"]
+        if req.branch:
+            cmd += ["-b", req.branch]
+        cmd += [url, dest]
+        action = "cloned"
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Git error: {result.stderr.strip() or result.stdout.strip()}"
+        )
+
+    # Return path relative to PROJECT_ROOT for display
+    rel_path = os.path.relpath(dest, PROJECT_ROOT).replace("\\", "/")
+    return {
+        "status": action,
+        "local_path": rel_path,
+        "absolute_path": dest,
+        "repo": f"{parts[-2]}/{parts[-1]}",
+    }
 
 @app.post("/api/task")
 def run_task(req: TaskRequest):
