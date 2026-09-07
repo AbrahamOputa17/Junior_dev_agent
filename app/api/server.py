@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from app.core.agent import JuniorDevAgent
 
+# Project root = two levels up from app/api/server.py
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 app = FastAPI(
     title="Junior Dev Agent API",
     description="Autonous AI Software Engineer Workstation API",
@@ -41,21 +44,27 @@ def get_dashboard():
 
 
 def _resolve_repo_path(repo_path: Optional[str]) -> str:
-    """Resolves target repository path, falling back to workspace root if empty."""
+    """Resolves target repository path against PROJECT_ROOT so relative paths
+    like 'demo_repo/auth_app' always work regardless of where uvicorn was started."""
     if not repo_path or not repo_path.strip():
-        return os.path.abspath(".")
-    
-    # Try as relative or absolute
-    abs_path = os.path.abspath(repo_path)
-    if os.path.exists(abs_path):
-        return abs_path
-    
-    # Try relative to project root
-    project_root_rel = os.path.join(os.getcwd(), repo_path)
-    if os.path.exists(project_root_rel):
-        return project_root_rel
+        return PROJECT_ROOT
 
-    return abs_path
+    # 1. Try as-is (handles absolute paths like C:\...)
+    if os.path.isabs(repo_path) and os.path.exists(repo_path):
+        return repo_path
+
+    # 2. Resolve relative to PROJECT_ROOT (most common case)
+    rel_to_root = os.path.join(PROJECT_ROOT, repo_path)
+    if os.path.exists(rel_to_root):
+        return rel_to_root
+
+    # 3. Resolve relative to current working directory as last resort
+    rel_to_cwd = os.path.abspath(repo_path)
+    if os.path.exists(rel_to_cwd):
+        return rel_to_cwd
+
+    # Return the PROJECT_ROOT-relative attempt so error message is clear
+    return rel_to_root
 
 
 @app.post("/api/index")
