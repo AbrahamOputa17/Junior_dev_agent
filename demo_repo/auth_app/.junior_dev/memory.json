@@ -1,0 +1,25 @@
+{
+  "project_name": "auth_app",
+  "tech_stack": {
+    "backend": "FastAPI / Python",
+    "frontend": "React / TypeScript",
+    "database": "PostgreSQL",
+    "cache": "Redis"
+  },
+  "conventions": [
+    "Services use dependency injection pattern",
+    "Tests are written using pytest framework",
+    "API errors throw HTTPException instances",
+    "Frontend auth state synced with session API"
+  ],
+  "decisions": [
+    {
+      "topic": "Authentication",
+      "decision": "JWT bearer tokens in HTTP headers"
+    },
+    {
+      "topic": "Caching",
+      "decision": "Redis used for session state"
+    }
+  ]
+}

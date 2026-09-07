@@ -1,0 +1,51 @@
+{
+  "total_files": 2,
+  "total_chunks": 5,
+  "chunks": [
+    {
+      "file_path": "app\\auth.py",
+      "chunk_type": "function",
+      "name": "check_session",
+      "start_line": 2,
+      "end_line": 3,
+      "content": "def check_session():\n    return {'valid': True, 'user': 'authenticated_user'}",
+      "docstring": ""
+    },
+    {
+      "file_path": "app\\auth.py",
+      "chunk_type": "function",
+      "name": "on_dashboard_refresh",
+      "start_line": 5,
+      "end_line": 9,
+      "content": "def on_dashboard_refresh():\n    session = check_session()\n    if session.get('valid'):\n        return {'status': 'logged_in'}\n    return {'status': 'logged_out'}",
+      "docstring": ""
+    },
+    {
+      "file_path": "app\\auth.py",
+      "chunk_type": "class",
+      "name": "AuthManager",
+      "start_line": 11,
+      "end_line": 13,
+      "content": "class AuthManager:\n    def refresh_dashboard(self):\n        return on_dashboard_refresh()",
+      "docstring": ""
+    },
+    {
+      "file_path": "app\\auth.py",
+      "chunk_type": "function",
+      "name": "refresh_dashboard",
+      "start_line": 12,
+      "end_line": 13,
+      "content": "    def refresh_dashboard(self):\n        return on_dashboard_refresh()",
+      "docstring": ""
+    },
+    {
+      "file_path": "tests\\test_auth.py",
+      "chunk_type": "function",
+      "name": "test_refresh_dashboard_maintains_session",
+      "start_line": 3,
+      "end_line": 6,
+      "content": "def test_refresh_dashboard_maintains_session():\n    auth = AuthManager()\n    res = auth.refresh_dashboard()\n    assert res[\"status\"] == \"logged_in\", f\"Expected logged_in status but got {res}\"",
+      "docstring": ""
+    }
+  ]
+}
