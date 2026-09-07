@@ -4,7 +4,7 @@ from app.tools.file_ops import read_file_tool, list_files_tool
 from app.tools.code_search import search_code_tool, find_references_tool
 from app.tools.git_tools import search_git_history_tool, git_diff_tool
 from app.tools.execution_tools import run_test_tool, run_linter_tool, run_type_checker_tool
-from app.tools.patch_tools import create_patch_tool, apply_patch_tool
+from app.tools.patch_tools import create_patch_tool, apply_patch_tool, apply_chunk_patch_tool
 
 class ToolRegistry:
     def __init__(self, repo_root: str, enforcer: SecurityPolicyEnforcer):
@@ -41,6 +41,8 @@ class ToolRegistry:
             return create_patch_tool(self.repo_root, **kwargs)
         elif tool_name == "apply_patch":
             return apply_patch_tool(self.repo_root, **kwargs)
+        elif tool_name == "apply_chunk_patch":
+            return apply_chunk_patch_tool(self.repo_root, **kwargs)
         else:
             return {"error": f"Unknown tool: '{tool_name}'"}
 
@@ -60,4 +62,5 @@ class ToolRegistry:
             {"name": "run_type_checker", "description": "Run type checker inside sandbox"},
             {"name": "create_patch", "description": "Draft patch file (Requires authorization)"},
             {"name": "apply_patch", "description": "Apply approved patch (Requires authorization)"},
+            {"name": "apply_chunk_patch", "description": "Apply targeted line-range replacement chunk (Requires authorization)"},
         ]

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Dict, Any, List
 
 class MemoryStore:
@@ -30,35 +31,87 @@ class MemoryStore:
             json.dump(memory_data, f, indent=2)
 
     def initialize_default_memory(self) -> Dict[str, Any]:
+        tech_stack = {}
+        conventions = []
+        decisions = []
+
+        # Detect Python
+        if os.path.exists(os.path.join(self.repo_root, "pyproject.toml")) or os.path.exists(os.path.join(self.repo_root, "requirements.txt")):
+            tech_stack["language"] = "Python"
+            conventions.append("Tests are written using pytest framework")
+
+        # Detect Node / JS / TS
+        if os.path.exists(os.path.join(self.repo_root, "package.json")):
+            tech_stack["runtime"] = "Node.js"
+            if os.path.exists(os.path.join(self.repo_root, "tsconfig.json")):
+                tech_stack["language"] = "TypeScript"
+            else:
+                tech_stack["language"] = "JavaScript"
+
+        # Detect Rust
+        if os.path.exists(os.path.join(self.repo_root, "Cargo.toml")):
+            tech_stack["language"] = "Rust"
+
+        # Detect Go
+        if os.path.exists(os.path.join(self.repo_root, "go.mod")):
+            tech_stack["language"] = "Go"
+
+        if not tech_stack:
+            tech_stack["detected"] = "General Software Repository"
+
         default_memory = {
             "project_name": os.path.basename(self.repo_root),
-            "tech_stack": {
-                "backend": "FastAPI / Python",
-                "frontend": "React / TypeScript",
-                "database": "PostgreSQL",
-                "cache": "Redis"
-            },
-            "conventions": [
-                "Services use dependency injection pattern",
-                "Tests are written using pytest framework",
-                "API errors throw HTTPException instances",
-                "Frontend auth state synced with session API"
-            ],
-            "decisions": [
-                {"topic": "Authentication", "decision": "JWT bearer tokens in HTTP headers"},
-                {"topic": "Caching", "decision": "Redis used for session state"}
-            ]
+            "tech_stack": tech_stack,
+            "conventions": conventions,
+            "decisions": decisions
         }
         self.save_memory(default_memory)
         return default_memory
 
-    def add_convention(self, convention: str):
+    def add_convention(self, convention: str, source: str = "user_prompt", confidence: float = 1.0):
         memory = self.load_memory()
-        if convention not in memory["conventions"]:
-            memory["conventions"].append(convention)
+        now = time.time()
+        entry = {
+            "fact": convention,
+            "source": source,
+            "timestamp": now,
+            "confidence": confidence
+        }
+        existing_facts = [c["fact"] if isinstance(c, dict) else c for c in memory.get("conventions", [])]
+        if convention not in existing_facts:
+            if "conventions" not in memory:
+                memory["conventions"] = []
+            memory["conventions"].append(entry)
             self.save_memory(memory)
 
-    def add_decision(self, topic: str, decision: str):
+    def add_decision(self, topic: str, decision: str, source: str = "llm_reasoning", confidence: float = 0.9):
         memory = self.load_memory()
-        memory["decisions"].append({"topic": topic, "decision": decision})
+        now = time.time()
+        entry = {
+            "topic": topic,
+            "decision": decision,
+            "source": source,
+            "timestamp": now,
+            "confidence": confidence
+        }
+        if "decisions" not in memory:
+            memory["decisions"] = []
+        memory["decisions"].append(entry)
+        self.save_memory(memory)
+
+    def resolve_conflict(self, topic: str, new_decision: str, source: str = "verifier_feedback"):
+        """
+        Overwrites outdated decisions on a specific topic with newer evidence.
+        """
+        memory = self.load_memory()
+        decisions = memory.get("decisions", [])
+        updated = [d for d in decisions if not (isinstance(d, dict) and d.get("topic") == topic)]
+        updated.append({
+            "topic": topic,
+            "decision": new_decision,
+            "source": source,
+            "timestamp": time.time(),
+            "confidence": 1.0
+        })
+        memory["decisions"] = updated
         self.save_memory(memory)

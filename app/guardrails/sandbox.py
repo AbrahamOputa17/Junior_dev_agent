@@ -1,18 +1,22 @@
 import os
+from pathlib import Path
 from app.guardrails.policy import PermissionError
 
 def validate_repository_path(repo_root: str, path: str) -> str:
     """
-    Validates and returns absolute path inside target repository root.
+    Validates and returns absolute path inside target repository root using canonical resolution.
     """
-    abs_repo = os.path.abspath(repo_root)
-    if os.path.isabs(path):
-        abs_target = os.path.abspath(path)
-    else:
-        abs_target = os.path.abspath(os.path.join(abs_repo, path))
+    root_path = Path(repo_root).resolve()
+    target = Path(path)
+    if not target.is_absolute():
+        target = root_path / target
+    try:
+        abs_target = target.resolve()
+    except Exception:
+        abs_target = target.absolute()
 
-    if not abs_target.startswith(abs_repo):
+    if not abs_target.is_relative_to(root_path):
         raise PermissionError(
-            f"Security Violation: Target path '{path}' is outside repository sandbox '{abs_repo}'."
+            f"Security Violation: Target path '{path}' is outside repository sandbox '{root_path}'."
         )
-    return abs_target
+    return str(abs_target)

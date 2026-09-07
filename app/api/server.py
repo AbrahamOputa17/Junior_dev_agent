@@ -9,19 +9,40 @@ from app.core.agent import JuniorDevAgent
 # Project root = two levels up from app/api/server.py
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from app.api.middleware import SecurityMiddleware
+
 app = FastAPI(
     title="Junior Dev Agent API",
-    description="Autonous AI Software Engineer Workstation API",
+    description="Autonomous AI Software Engineer Workstation API",
     version="0.1.0"
 )
 
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()] or [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000"
+]
+
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"status": "error", "error": exc.detail, "code": "HTTP_ERROR"}
+    )
 
 class TaskRequest(BaseModel):
     repo_path: str

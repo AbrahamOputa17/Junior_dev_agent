@@ -196,9 +196,9 @@ class TestMode(BaseAgentMode):
                 system, user = test_prompts(task_prompt, context)
                 raw = chat_completion(system, user)
                 llm_data = _parse_llm_json(raw)
-            except OpenAIError as e:
+            except Exception as e:
                 err_type = type(e).__name__
-                msg = "OpenAI API rate limit or billing quota exceeded." if ("RateLimit" in err_type or "429" in str(e)) else f"LLM API error ({err_type})"
+                msg = f"LLM API error ({err_type})"
                 llm_data = {
                     "observations": msg,
                     "recommendations": ["Check OPENAI_API_KEY credit balance at platform.openai.com"]
@@ -209,18 +209,21 @@ class TestMode(BaseAgentMode):
                 "recommendations": ["Configure OPENAI_API_KEY in .env file"]
             }
 
-        return {
-            "mode": self.mode_name,
-            "task": task_prompt,
-            "status": "test_generation_ready",
-            "llm_powered": is_llm_available(),
-            **llm_data,
-        }
+        test_written = False
+        write_status = None
+        if user_approved and target_file and (patch_content or "generated_test_code" in llm_data):
+            self.policy.authorize_modifications()
+            test_code = patch_content or llm_data.get("generated_test_code", "")
+            if test_code:
+                write_status = self.tools.execute_tool("apply_patch", file_path=target_file, content=test_code)
+                test_written = True
 
         return {
             "mode": self.mode_name,
             "task": task_prompt,
-            "status": "test_generation_ready",
+            "status": "test_created" if test_written else "test_generation_ready",
             "llm_powered": is_llm_available(),
+            "test_written": test_written,
+            "write_status": write_status,
             **llm_data,
         }

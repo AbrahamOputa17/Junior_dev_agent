@@ -1,16 +1,42 @@
 import os
 import json
+import time
+import hmac
+import hashlib
 from typing import Dict, Any, Optional
 from app.modes.base import BaseAgentMode
 from app.verifier.runner import VerificationRunner
 from app.verifier.proof import VerificationFeedback, ProofOfFixGenerator
 from app.llm.client import chat_completion, is_llm_available
 from app.llm.prompts import implement_plan_prompts, implement_patch_prompts
+from app.core.task_store import TaskRunStore
+
 try:
     from openai import OpenAIError
 except ImportError:
     OpenAIError = Exception  # type: ignore
 
+APPROVAL_SECRET = os.getenv("JUNIOR_DEV_APPROVAL_SECRET", "default_approval_secret_key_123")
+
+def create_approval_record(task_prompt: str, target_file: Optional[str]) -> Dict[str, Any]:
+    timestamp = int(time.time())
+    expires_at = timestamp + 3600  # 1 hour validity
+    payload = f"{task_prompt}:{target_file or ''}:{timestamp}:{expires_at}"
+    signature = hmac.new(APPROVAL_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return {
+        "timestamp": timestamp,
+        "expires_at": expires_at,
+        "signature": signature,
+        "payload": payload
+    }
+
+def verify_approval_record(record: Dict[str, Any]) -> bool:
+    if not record or "signature" not in record or "payload" not in record:
+        return False
+    if time.time() > record.get("expires_at", 0):
+        return False
+    expected = hmac.new(APPROVAL_SECRET.encode(), record["payload"].encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(record["signature"], expected)
 
 def _parse_llm_json(raw: str) -> Dict[str, Any]:
     """Strips markdown code fences and parses JSON from LLM output."""
@@ -30,6 +56,7 @@ class ImplementMode(BaseAgentMode):
         self.verifier = VerificationRunner(repo_root)
         self.feedback = VerificationFeedback()
         self.proof_gen = ProofOfFixGenerator()
+        self.run_store = TaskRunStore(repo_root)
 
     def execute(
         self,
@@ -81,15 +108,20 @@ class ImplementMode(BaseAgentMode):
                     ],
                 }
 
+            approval_rec = create_approval_record(task_prompt, target_file)
+            run = self.run_store.create_run(self.mode_name, task_prompt, target_file)
+
             return {
                 "step": "3_user_approval_required",
                 "mode": self.mode_name,
                 "task": task_prompt,
+                "run_id": run.run_id,
                 "llm_powered": is_llm_available(),
                 **plan_data,
                 "authorization_gate": {
                     "status": "AWAITING_USER_APPROVAL",
                     "message": "Review proposed fix plan and approve execution.",
+                    "approval_record": approval_rec,
                 },
             }
 
@@ -120,47 +152,25 @@ class ImplementMode(BaseAgentMode):
                 )
                 apply_res["llm_change_summary"] = patch_data.get("change_summary", "")
                 llm_patch_applied = True
-            except OpenAIError as e:
+            except Exception as e:
                 apply_res = {"status": "llm_error", "error": f"{type(e).__name__}: {str(e)[:200]}"}
 
             if not llm_patch_applied:
-                # Fall through to demo fallback below
-                demo_target = target_file
-                demo_fix = (
-                    "# Auth Module - Fixed Race Condition\n"
-                    "def check_session():\n"
-                    "    return {'valid': True, 'user': 'authenticated_user'}\n\n"
-                    "def on_dashboard_refresh():\n"
-                    "    session = check_session()\n"
-                    "    if session.get('valid'):\n"
-                    "        return {'status': 'logged_in'}\n"
-                    "    return {'status': 'logged_out'}\n\n"
-                    "class AuthManager:\n"
-                    "    def refresh_dashboard(self):\n"
-                    "        return on_dashboard_refresh()\n"
-                )
-                apply_res = self.tools.execute_tool(
-                    "apply_patch", file_path=demo_target, content=demo_fix
-                )
+                return {
+                    "step": "4_patch_generation_failed",
+                    "mode": self.mode_name,
+                    "task": task_prompt,
+                    "status": "failed_closed",
+                    "error": apply_res.get("error", "LLM patch generation failed and no manual patch_content was provided.")
+                }
         else:
-            # Fallback demo fix for the auth_app demo repo
-            demo_target = target_file or "app/auth.py"
-            demo_fix = (
-                "# Auth Module - Fixed Race Condition\n"
-                "def check_session():\n"
-                "    return {'valid': True, 'user': 'authenticated_user'}\n\n"
-                "def on_dashboard_refresh():\n"
-                "    session = check_session()\n"
-                "    if session.get('valid'):\n"
-                "        return {'status': 'logged_in'}\n"
-                "    return {'status': 'logged_out'}\n\n"
-                "class AuthManager:\n"
-                "    def refresh_dashboard(self):\n"
-                "        return on_dashboard_refresh()\n"
-            )
-            apply_res = self.tools.execute_tool(
-                "apply_patch", file_path=demo_target, content=demo_fix
-            )
+            return {
+                "step": "4_patch_generation_failed",
+                "mode": self.mode_name,
+                "task": task_prompt,
+                "status": "failed_closed",
+                "error": "No patch_content provided and LLM is unavailable or target_file was not specified."
+            }
 
         # ── Step 5: Self-Verification Loop ───────────────────────────────────
         verify_res = self.verifier.verify(test_cmd="pytest")

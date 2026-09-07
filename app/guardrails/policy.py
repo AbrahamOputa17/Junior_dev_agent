@@ -46,11 +46,21 @@ class SecurityPolicyEnforcer:
     def validate_path(self, target_path: str) -> str:
         """
         Ensures target path does not escape the repository root directory.
+        Uses canonical path resolution to prevent symlink and junction escapes.
         """
-        abs_target = os.path.abspath(os.path.join(self.repo_root, target_path))
-        if not abs_target.startswith(self.repo_root):
+        from pathlib import Path
+        root_path = Path(self.repo_root).resolve()
+        target = Path(target_path)
+        if not target.is_absolute():
+            target = root_path / target
+        try:
+            abs_target = target.resolve()
+        except Exception:
+            abs_target = target.absolute()
+
+        if not abs_target.is_relative_to(root_path):
             raise PermissionError(
                 f"Access denied: Target path '{target_path}' resolves outside "
                 f"the repository root '{self.repo_root}'."
             )
-        return abs_target
+        return str(abs_target)

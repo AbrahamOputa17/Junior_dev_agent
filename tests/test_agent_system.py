@@ -72,7 +72,14 @@ def test_agent_implement_mode_authorization_gate():
 def test_agent_implement_mode_execution_and_verification():
     """Verify Implement mode applies patch and runs self-verification after user approval."""
     agent = JuniorDevAgent(DEMO_REPO)
-    res = agent.run_task(mode="implement", task_prompt="Fix session race condition", user_approved=True)
+    patch_code = "# Auth Module - Verified Fix\ndef check_session():\n    return {'valid': True}"
+    res = agent.run_task(
+        mode="implement",
+        task_prompt="Fix session race condition",
+        user_approved=True,
+        target_file="app/auth.py",
+        patch_content=patch_code
+    )
     assert res["step"] == "7_completed"
     assert "proof_of_fix" in res
 
